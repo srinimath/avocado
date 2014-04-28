@@ -60,7 +60,8 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
 class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
-                             val regionWindow: Int = 200) extends ReadCall {
+                             val regionWindow: Int = 200,
+                             val flankLength: Int = 50) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -145,7 +146,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
   def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, reference.length)
-    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, removeSpurs)
+    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, flankLength, removeSpurs)
     kmerGraph
   }
 
@@ -261,15 +262,22 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val hmm = new HMMAligner
     val refHaplotype = new Haplotype(reference, region)
 
+    println("Enumerating haplotypes")
     // Score all haplotypes against the reads.
-    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map( path =>
-      new Haplotype(path.haplotypeString, region, reference)).toSeq:_*)(HaplotypeOrdering.reverse)
+    val orderedHaplotypes = TreeSet[Haplotype](kmerGraph.allPaths.map(path =>
+      new Haplotype(path.haplotypeString, region, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
+    println("Done enumerating haplotypes")
+    orderedHaplotypes.foreach(println)
 
     // Pick the top X-1 haplotypes and the reference haplotype.
     val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList
 
+    println("Best:")
+    bestHaplotypes.foreach(println)
+
     // Score the haplotypes pairwise inclusively.
     val orderedHaplotypePairBuilder = TreeSet.newBuilder[HaplotypePair](HaplotypePairOrdering.reverse)
+    println("Have " + bestHaplotypes.size)
     for (i <- 0 until bestHaplotypes.size) {
       for (j <- i until bestHaplotypes.size) {
         var pair = new HaplotypePair(bestHaplotypes(i), bestHaplotypes(j), hmm)
@@ -279,8 +287,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
 
     val orderedHaplotypePairs = orderedHaplotypePairBuilder.result
 
-    if (ReadCallAssemblyPhaser.debug) {
-      println("After scoring, have:")
+    if (true) { //ReadCallAssemblyPhaser.debug) {
+      println("After scoring, have " + orderedHaplotypePairs.size + ":")
       orderedHaplotypePairs.foreach(println)
     }
 

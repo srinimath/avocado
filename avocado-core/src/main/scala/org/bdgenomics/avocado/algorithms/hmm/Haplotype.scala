@@ -1,3 +1,18 @@
+/*
+ * Copyright (c) 2013-2014. Regents of the University of California
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
 package org.bdgenomics.avocado.algorithms.hmm
 
 import scala.collection.mutable.ArrayBuffer
@@ -17,11 +32,10 @@ class Haplotype(val sequence: String, region: Seq[RichADAMRecord], val reference
   val hasVariants = hmm.alignSequences(reference, sequence, null)
   val alignment = hmm.getAlignment()
 
-  val perReadLikelihoods: Seq[Double] = region.map( read => {
+  val perReadLikelihoods: Seq[Double] = region.map(read => {
     try {
       hmm.alignSequences(sequence, read.getSequence.toString, null)
-      val readLikelihood = hmm.getLikelihood + hmm.getPrior
-      readLikelihood
+      hmm.getLikelihood + hmm.getPrior
     } catch {
       case _: Throwable => {
         0.0
@@ -32,7 +46,7 @@ class Haplotype(val sequence: String, region: Seq[RichADAMRecord], val reference
   val readsLikelihood = perReadLikelihoods.sum
 
   override def toString(): String = {
-    sequence
+    sequence + ", " + readsLikelihood
   }
 
 }
@@ -52,10 +66,9 @@ object HaplotypeOrdering extends Ordering[Haplotype] {
    * @return Ordering info for haplotypes.
    */
   def compare(h1: Haplotype, h2: Haplotype): Int = {
-    if (h1.sequence == h2.sequence){
+    if (h1.sequence == h2.sequence) {
       h1.readsLikelihood.compare(h2.readsLikelihood)
-    }
-    else if (h1.readsLikelihood < h2.readsLikelihood) {
+    } else if (h1.readsLikelihood < h2.readsLikelihood) {
       -1
     } else {
       1
@@ -114,9 +127,13 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    * @return Phred scaled likelihood.
    */
   def scorePairLikelihood: Double = {
-    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map( scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
+    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods)
+      .map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0))
+      .sum
     hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
+
     val priorProb = hmm.getPrior
+
     readsProb + priorProb
   }
 
@@ -130,19 +147,20 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
 
   /**
    * Compares two haplotype pairs. Returns (-1, 0, 1) if first pair has (lower, same, higher)
-   * pairwise likelihood.
+   * pairwise likelihood. Only returns 0 if both haplotype pairs are composed of the same haplotypes.
    *
    * @param pair1 First haplotype pair to compare.
    * @param pair2 Second haplotype pair to compare.
    * @return Comparison of haplotype pairs.
    */
   def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
-    if (pair1.pairLikelihood < pair2.pairLikelihood) {
-      -1
-    } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
-      1
-    } else {
+    if ((pair1.haplotype1.sequence == pair2.haplotype1.sequence && pair1.haplotype2.sequence == pair2.haplotype2.sequence) ||
+      (pair1.haplotype1.sequence == pair2.haplotype2.sequence && pair1.haplotype2.sequence == pair2.haplotype1.sequence)) {
       0
+    } else if (pair1.pairLikelihood < pair2.pairLikelihood) {
+      -1
+    } else {
+      1
     }
   }
 }

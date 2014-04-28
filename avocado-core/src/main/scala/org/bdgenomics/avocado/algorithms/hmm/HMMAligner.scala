@@ -38,6 +38,7 @@ object AlignmentState extends Enumeration {
 class HMMAligner(val indelPrior: Double = -4.0,
                  val mismatchPrior: Double = -3.0 - log10(3.0),
                  val matchPrior: Double = log10(1.0 - 1.0e-3),
+                 val clipPrior: Double = -3.5,
                  val indelToMatchPrior: Double = -4.0,
                  val indelToIndelPrior: Double = -4.0) {
 
@@ -50,6 +51,8 @@ class HMMAligner(val indelPrior: Double = -4.0,
   private var matches: Array[Double] = Array(0.0)
   private var inserts: Array[Double] = Array(0.0)
   private var deletes: Array[Double] = Array(0.0)
+  private var startClip: Array[Double] = Array(0.0)
+  private var endClip: Array[Double] = Array(0.0)
 
   private var alignment: ArrayBuffer[(Int, Char)] = null
 
@@ -74,6 +77,7 @@ class HMMAligner(val indelPrior: Double = -4.0,
     var hasVariants = false
     var numSnps = 0
     var numIndels = 0
+    var numClipped = 0
     var revAlignment = ""
     var revAlignedTestSeq = ""
     var revAlignedRefSeq = ""
@@ -97,9 +101,10 @@ class HMMAligner(val indelPrior: Double = -4.0,
        * the next direction to move by looking at the "state" of the current coordinate. We call
        * our current 'state' by choosing the state with the highest cumulative likelihood.
        */
-      if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
-        revAlignedRefSeq += refSequence(j - 1)
+      if (matches(idx) >= inserts(idx) && matches(idx) >= deletes(idx) &&
+        matches(idx) >= startClip(idx) && matches(idx) >= endClip(idx)) {
+        revAlignedTestSeq += testSequence(i - 1).toUpper
+        revAlignedRefSeq += refSequence(j - 1).toUpper
         if (testSequence(i - 1) != refSequence(j - 1)) {
           hasVariants = true
           numSnps += 1
@@ -109,19 +114,26 @@ class HMMAligner(val indelPrior: Double = -4.0,
         }
         i -= 1
         j -= 1
-      } else if (inserts(idx) >= deletes(idx)) {
-        revAlignedTestSeq += testSequence(i - 1)
+      } else if (inserts(idx) >= deletes(idx) && inserts(idx) >= startClip(idx) &&
+        inserts(idx) >= endClip(idx)) {
         revAlignedRefSeq += '_'
+        revAlignedTestSeq += testSequence(i - 1).toUpper
         hasVariants = true
         numIndels += 1
         revAlignment += 'I'
         i -= 1
-      } else {
-        revAlignedRefSeq += refSequence(j - 1)
+      } else if (deletes(idx) >= startClip(idx) && deletes(idx) >= endClip(idx)) {
+        revAlignedRefSeq += refSequence(j - 1).toUpper
         revAlignedTestSeq += '_'
         hasVariants = true
         numIndels += 1
         revAlignment += 'D'
+        j -= 1
+      } else {
+        revAlignedRefSeq += refSequence(j - 1)
+        revAlignedTestSeq += testSequence(i - 1).toLower
+        revAlignment += 'S'
+        numClipped += 1
         j -= 1
       }
     }
@@ -135,7 +147,7 @@ class HMMAligner(val indelPrior: Double = -4.0,
     }
 
     var unitAlignment = revAlignment.reverse
-    if (HMMAligner.debug) println(unitAlignment)
+    if (true) println(unitAlignment)
     alignment = new ArrayBuffer[(Int, Char)]
 
     var alignSpan: Int = 0
@@ -158,8 +170,11 @@ class HMMAligner(val indelPrior: Double = -4.0,
     alignment += tok
 
     // Compute the prior probability of the alignments, with the Dindel numbers.
-    alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels
-    if (HMMAligner.debug) println("ap: " + alignmentPrior)
+    alignmentPrior = mismatchPrior * numSnps + indelPrior * numIndels // + clipPrior * numClipped
+    if (true) { //HMMAligner.debug) 
+      println("ap: " + alignmentPrior + " snps: " + mismatchPrior + " * " + numSnps +
+        " indels: " + indelPrior + " * " + numIndels + " clips: " + clipPrior + " * " + numClipped)
+    }
 
     // Returns whether the alignment has any SNPs or indels.
     hasVariants
@@ -176,6 +191,8 @@ class HMMAligner(val indelPrior: Double = -4.0,
       matches = new Array[Double](matSize)
       inserts = new Array[Double](matSize)
       deletes = new Array[Double](matSize)
+      startClip = new Array[Double](matSize)
+      endClip = new Array[Double](matSize)
     }
 
     // Note: want to use the _test_ haplotype length here, not the ref length.
@@ -187,6 +204,8 @@ class HMMAligner(val indelPrior: Double = -4.0,
     matches(0) = 2.0 * eta
     inserts(0) = Double.NegativeInfinity
     deletes(0) = Double.NegativeInfinity
+    startClip(0) = 2.0 * eta
+    endClip(0) = 2.0 * eta
     for (i <- 0 until paddedTestLen) {
       for (j <- 0 until paddedRefLen) {
         if (i > 0 || j > 0) {
@@ -203,7 +222,8 @@ class HMMAligner(val indelPrior: Double = -4.0,
             val mMatch = matches(idx)
             val mInsert = inserts(idx)
             val mDelete = deletes(idx)
-            val mMax = max(mMatch, max(mInsert, mDelete)) + prior
+            val mClip = startClip(idx)
+            val mMax = max(mMatch, max(mClip, max(mInsert, mDelete))) + prior
             mMax
           } else {
             Double.NegativeInfinity
@@ -226,15 +246,30 @@ class HMMAligner(val indelPrior: Double = -4.0,
           } else {
             Double.NegativeInfinity
           }
+          val s = if (j >= 1) {
+            val idx = i * stride + (j - 1)
+            startClip(idx) + clipPrior
+          } else {
+            2.0 * eta
+          }
+          val e = if (j >= 1) {
+            val idx = i * stride + (j - 1)
+            max(matches(idx), endClip(idx)) + clipPrior
+          } else {
+            2.0 * eta
+          }
           val idx = i * stride + j
           matches(idx) = m
           inserts(idx) = ins
           deletes(idx) = del
+          startClip(idx) = s
+          endClip(idx) = e
         }
       }
     }
 
-    alignmentLikelihood = max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
+    println("al: " + matches(matSize - 1) + ", " + endClip(matSize - 1) + ", " + inserts(matSize - 1) + ", " + deletes(matSize - 1))
+    alignmentLikelihood = max(matches(matSize - 1), max(endClip(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1))))
   }
 
   /**

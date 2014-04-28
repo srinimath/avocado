@@ -35,6 +35,10 @@ case class Kmer(val kmerSeq: String, val weight: Int = 1) {
   override def toString: String = {
     prefix + "[" + suffix + "]"
   }
+
+  def toDot: String = {
+    prefix + " -> " + nextPrefix + " ;"
+  }
 }
 
 /**
