@@ -36,7 +36,7 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
 
   // P( indel -> match) = 1 - P(indel -> indel) = 1 - P( gap-continue)
   // in log-space
-  val LOG_GAP_CLOSE =  log10(1 - pow(10, LOG_GAP_CONTINUE))
+  val LOG_GAP_CLOSE = log10(1 - pow(10, LOG_GAP_CONTINUE))
 
   // P( match) = 1 - P(mismatch)
   val MATCH_PROB = 1 - pow(10, LOG_SNP_RATE)
@@ -64,7 +64,7 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
   }
 
   def getAlignmentLikelihood(): Double = {
-    max(matches(matSize - 1), max(inserts(matSize - 1) , deletes(matSize - 1)))
+    max(matches(matSize - 1), max(inserts(matSize - 1), deletes(matSize - 1)))
   }
 
   def initialise(sequenceLength: Int) = {
@@ -119,19 +119,17 @@ class TransitionMatrix(val LOG_GAP_OPEN: Double = -4.0,
   }
 
   private def gapProbability(state: AlignmentState, idx: Int): Double = {
-    state match
-    {
-      case AlignmentState.Insertion => inserts(idx) + LOG_GAP_CONTINUE
-      case AlignmentState.Deletion => deletes(idx) + LOG_GAP_CONTINUE
+    state match {
+      case AlignmentState.Insertion                       => inserts(idx) + LOG_GAP_CONTINUE
+      case AlignmentState.Deletion                        => deletes(idx) + LOG_GAP_CONTINUE
       case AlignmentState.Match | AlignmentState.Mismatch => matches(idx) + LOG_GAP_OPEN
     }
   }
 
   private def matchProbability(state: AlignmentState, idx: Int): Double = {
-    state match
-    {
-      case AlignmentState.Insertion => inserts(idx) + LOG_GAP_CLOSE
-      case AlignmentState.Deletion => deletes(idx) + LOG_GAP_CLOSE
+    state match {
+      case AlignmentState.Insertion                       => inserts(idx) + LOG_GAP_CLOSE
+      case AlignmentState.Deletion                        => deletes(idx) + LOG_GAP_CLOSE
       case AlignmentState.Match | AlignmentState.Mismatch => matches(idx) + LOG_MATCH_TO_MATCH
     }
   }

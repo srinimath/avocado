@@ -54,7 +54,7 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    * @return Phred scaled likelihood.
    */
   def scorePairLikelihood: Double = {
-    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map( scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
+    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
     val alignment = hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
     readsProb + alignment.prior
   }
@@ -84,8 +84,10 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
   def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
     if (pair1.pairLikelihood < pair2.pairLikelihood) {
       -1
-    } else {
+    } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
       1
+    } else {
+      0
     }
   }
 }

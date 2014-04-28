@@ -20,8 +20,7 @@ import org.bdgenomics.avocado.algorithms.hmm._
 import org.scalatest.FunSuite
 import scala.collection.JavaConversions._
 import org.bdgenomics.adam.rich.RichADAMRecord
-import org.bdgenomics.adam.avro.{ADAMGenotypeAllele, ADAMRecord, ADAMContig}
-
+import org.bdgenomics.adam.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
 
 class ReadCallAssemblySuite extends FunSuite {
 

@@ -23,7 +23,7 @@ import org.bdgenomics.adam.avro.{
   ADAMRecord,
   ADAMVariant
 }
-import scala.collection.immutable.{SortedSet, TreeSet}
+import scala.collection.immutable.{ SortedSet, TreeSet }
 import org.bdgenomics.adam.models.ADAMVariantContext
 import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
@@ -60,7 +60,8 @@ object ReadCallAssemblyPhaser extends VariantCallCompanion {
  * Phase (diploid) haplotypes with kmer assembly on active regions.
  */
 class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
-                             val regionWindow: Int = 200) extends ReadCall {
+                             val regionWindow: Int = 200,
+                             val flankLength: Int = 40) extends ReadCall {
 
   val companion = ReadCallAssemblyPhaser
 
@@ -144,7 +145,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
   def assemble(region: Seq[RichADAMRecord], reference: String, removeSpurs: Boolean = false): KmerGraph = {
     val readLen = region(0).getSequence.length
     val regionLen = min(regionWindow + readLen - 1, reference.length)
-    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, removeSpurs)
+    var kmerGraph = KmerGraph(kmerLen, readLen, regionLen, reference, region, flankLength, removeSpurs)
     kmerGraph
   }
 
@@ -261,8 +262,8 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     val refHaplotype = new Haplotype(reference, region, aligner, reference)
 
     // Score all haplotypes against the reads.
-    val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.map( path =>
-      new Haplotype(path.haplotypeString, region, aligner, reference)).toSeq:_*)(HaplotypeOrdering.reverse)
+    val orderedHaplotypes = SortedSet[Haplotype](kmerGraph.allPaths.map(path =>
+      new Haplotype(path.haplotypeString, region, aligner, reference)).toSeq: _*)(HaplotypeOrdering.reverse)
 
     // Pick the top X-1 haplotypes and the reference haplotype.
     val bestHaplotypes = refHaplotype :: orderedHaplotypes.take(maxHaplotypes - 1).toList

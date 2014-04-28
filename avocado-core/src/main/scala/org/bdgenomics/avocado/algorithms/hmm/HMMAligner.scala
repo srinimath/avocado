@@ -26,7 +26,6 @@ object HMMAligner {
     hmm.alignSequences(refSequence, testSequence, testQualities)
   }
 
-
 }
 
 /**
@@ -40,9 +39,9 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
                  val LOG_INDEL_RATE: Double = -4.0) {
 
   val transitionMatrix = new TransitionMatrix(LOG_GAP_OPEN_PENALTY,
-                                              LOG_GAP_CONTINUE_PENALTY,
-                                              LOG_SNP_RATE,
-                                              LOG_INDEL_RATE)
+    LOG_GAP_CONTINUE_PENALTY,
+    LOG_SNP_RATE,
+    LOG_INDEL_RATE)
   /**
    * Aligns sequences.
    *
@@ -126,7 +125,6 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
 
     transitionMatrix.reallocate(paddedRefLen, paddedTestLen)
 
-
     for (testSeqPos <- 0 until paddedTestLen) {
       for (refSeqPos <- 0 until paddedRefLen) {
         val m: Double = transitionMatrix.getMatchLikelihood(testSeqPos, refSeqPos, stride, refSequence, testSequence)
@@ -134,7 +132,7 @@ class HMMAligner(val LOG_GAP_OPEN_PENALTY: Double = -4.0,
         val del: Double = transitionMatrix.getDeletionLikelihood(testSeqPos, refSeqPos, stride)
         if (testSeqPos > 0 || refSeqPos > 0) {
           val idx = testSeqPos * stride + refSeqPos
-          transitionMatrix.matches(idx) =  m
+          transitionMatrix.matches(idx) = m
           transitionMatrix.inserts(idx) = ins
           transitionMatrix.deletes(idx) = del
         }
