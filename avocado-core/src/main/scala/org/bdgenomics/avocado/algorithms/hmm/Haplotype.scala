@@ -12,18 +12,24 @@ import scala.math._
 class Haplotype(val sequence: String, region: Seq[RichADAMRecord], hmm: HMMAligner = new HMMAligner, val reference: String = "") {
 
   lazy val referenceAlignment = hmm.alignSequences(reference, sequence, null)
+  assert(referenceAlignment.hasVariants == (sequence != reference), "HMM calls variant, but sequence matches reference. " + referenceAlignment)
   lazy val hasVariants = referenceAlignment.hasVariants
+  lazy val variantCount = referenceAlignment.alignmentStateSequence
+    .filter(s => s == 'X' || s == 'I' || s == 'D').length
 
-  lazy val perReadLikelihoods: Seq[Double] = region.map(read => {
-    try {
-      val alignment = HMMAligner.align(sequence, read.getSequence.toString, null)
-      alignment.likelihood + alignment.prior
-    } catch {
-      case _: Throwable => {
-        0.0
+  lazy val perReadLikelihoods: Seq[Double] = {
+    println(sequence)
+    region.map(read => {
+      try {
+        val alignment = HMMAligner.align(sequence, read.getSequence.toString, null)
+        alignment.likelihood + alignment.prior
+      } catch {
+        case _: Throwable => {
+          0.0
+        }
       }
-    }
-  })
+    })
+  }
 
   lazy val readsLikelihood = perReadLikelihoods.sum
 

@@ -16,15 +16,26 @@
 
 package org.bdgenomics.avocado.calls.reads
 
-import org.bdgenomics.avocado.algorithms.hmm._
-import org.scalatest.FunSuite
-import scala.collection.JavaConversions._
+import org.apache.spark.SparkContext
+import org.apache.spark.rdd.RDD
+import org.bdgenomics.adam.rdd.ADAMContext
+import org.bdgenomics.adam.rdd.ADAMContext._
 import org.bdgenomics.adam.rich.RichADAMRecord
+import org.bdgenomics.adam.util.SparkFunSuite
 import org.bdgenomics.adam.avro.{ ADAMGenotypeAllele, ADAMRecord, ADAMContig }
+import org.bdgenomics.avocado.algorithms.hmm._
+import parquet.filter.UnboundRecordFilter
+import scala.collection.JavaConversions._
 
-class ReadCallAssemblySuite extends FunSuite {
+class ReadCallAssemblySuite extends SparkFunSuite {
 
   val rcap_short = new ReadCallAssemblyPhaser(4, 0)
+  val rcap_long = new ReadCallAssemblyPhaser(20, 1000, 40)
+
+  def na12878_chr20_snp_reads: RDD[RichADAMRecord] = {
+    val path = ClassLoader.getSystemClassLoader.getResource("NA12878_snp_A2G_chr20_225058.sam").getFile
+    sc.adamLoad[ADAMRecord, UnboundRecordFilter](path).map(r => RichADAMRecord(r))
+  }
 
   def make_read(sequence: String,
                 start: Long,
@@ -142,11 +153,11 @@ class ReadCallAssemblySuite extends FunSuite {
 
   test("Call simple het INS, ~10x coverage") {
     val reference = "TACCAATGTAA"
-    val read0 = make_read("TACCCAA", 0L, "4M1I2M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
-    val read1 = make_read("ACCCAAT", 1L, "3M1I3M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
-    val read2 = make_read("CCCAATG", 2L, "2M1I4M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
-    val read3 = make_read("CCCAATG", 2L, "2M1I4M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
-    val read4 = make_read("CCAATGT", 3L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
+    val read0 = make_read("TACCAAA", 0L, "4M1I2M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 0)
+    val read1 = make_read("ACCAAAT", 1L, "3M1I3M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 1)
+    val read2 = make_read("CCAAATG", 2L, "2M1I4M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 2)
+    val read3 = make_read("CAAATGT", 2L, "1M1I5M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 3)
+    val read4 = make_read("AAATGTA", 3L, "1I6M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 4)
     val read5 = make_read("TACCAAT", 0L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 5)
     val read6 = make_read("ACCAATG", 1L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 6)
     val read7 = make_read("CCAATGT", 2L, "7M", "7", 7, Seq(50, 50, 50, 50, 50, 50, 50), 7)
@@ -159,9 +170,9 @@ class ReadCallAssemblySuite extends FunSuite {
     val variants = rcap_short.phaseAssembly(readBucket, kmerGraph, reference)
 
     assert(variants.length === 1)
-    assert(variants.head.position.pos === 2L)
-    assert(variants.head.variant.variant.getReferenceAllele === "C")
-    assert(variants.head.variant.variant.getVariantAllele === "CC")
+    assert(variants.head.position.pos === 4L)
+    assert(variants.head.variant.variant.getReferenceAllele === "A")
+    assert(variants.head.variant.variant.getVariantAllele === "AA")
     val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)
     assert(alleles.head === ADAMGenotypeAllele.Ref)
@@ -189,6 +200,24 @@ class ReadCallAssemblySuite extends FunSuite {
     assert(variants.length === 1)
     assert(variants.head.position.pos === 4L)
     assert(variants.head.variant.variant.getReferenceAllele === "CA")
+    assert(variants.head.variant.variant.getVariantAllele === "C")
+    val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
+    assert(alleles.length === 2)
+    assert(alleles.head === ADAMGenotypeAllele.Ref)
+    assert(alleles.last === ADAMGenotypeAllele.Alt)
+  }
+
+  sparkTest("call A->G snp on NA12878 chr20 @ 225057") {
+    val reads = na12878_chr20_snp_reads.collect.toSeq
+    val reference = rcap_long.getReference(reads)
+
+    val kmerGraph = rcap_long.assemble(reads, reference)
+    val variants = rcap_long.phaseAssembly(reads, kmerGraph, reference)
+
+    assert(variants.length === 1)
+    println(variants.head.position.pos)
+    //assert(variants.head.position.pos === 225057L)
+    assert(variants.head.variant.variant.getReferenceAllele === "A")
     assert(variants.head.variant.variant.getVariantAllele === "C")
     val alleles: List[ADAMGenotypeAllele] = asScalaBuffer(variants.head.genotypes.head.getAlleles).toList
     assert(alleles.length === 2)

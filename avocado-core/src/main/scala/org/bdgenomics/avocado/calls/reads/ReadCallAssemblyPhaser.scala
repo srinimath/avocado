@@ -279,7 +279,7 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
 
     val orderedHaplotypePairs = orderedHaplotypePairBuilder.result
 
-    if (ReadCallAssemblyPhaser.debug) {
+    if (true) { //ReadCallAssemblyPhaser.debug) {
       println("After scoring, have:")
       orderedHaplotypePairs.foreach(println)
     }
@@ -287,6 +287,13 @@ class ReadCallAssemblyPhaser(val kmerLen: Int = 20,
     // Pick the best haplotype pairs with and without indels.
     val calledHaplotypePair = orderedHaplotypePairs.find(_.hasVariants)
     val uncalledHaplotypePair = orderedHaplotypePairs.find(!_.hasVariants).get
+
+    if (calledHaplotypePair.isDefined) {
+      println(calledHaplotypePair.get.haplotype1.referenceAlignment)
+      println(calledHaplotypePair.get.haplotype2.referenceAlignment)
+    }
+    println(uncalledHaplotypePair.haplotype1.referenceAlignment)
+    println(uncalledHaplotypePair.haplotype2.referenceAlignment)
 
     // Compute the variant error probability and the equivalent phred score,
     // and use them for all called variants.

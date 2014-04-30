@@ -43,9 +43,12 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
 
   lazy val hasVariants = haplotype1.hasVariants || haplotype2.hasVariants
   lazy val pairLikelihood = scorePairLikelihood
+  lazy val variantCount = haplotype1.variantCount + haplotype2.variantCount
 
   override def toString(): String = {
-    haplotype1.sequence + ", " + haplotype2.sequence + ", " + ("%1.3f" format pairLikelihood)
+    haplotype1.sequence + ", " + haplotype1.hasVariants + ", " +
+      haplotype2.sequence + ", " + haplotype2.hasVariants + ", " +
+      ("%1.3f" format pairLikelihood) + ", " + hasVariants
   }
 
   /**
@@ -54,9 +57,10 @@ class HaplotypePair(val haplotype1: Haplotype, val haplotype2: Haplotype, hmm: H
    * @return Phred scaled likelihood.
    */
   def scorePairLikelihood: Double = {
-    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)).sum
+    val readsProb = haplotype1.perReadLikelihoods.zip(haplotype1.perReadLikelihoods).map(scores => HaplotypePair.exactLogSumExp10(scores._1, scores._2) - log10(2.0)) //.sum
+    println(readsProb.map(_.toString).reduce(_ + "," + _))
     val alignment = hmm.alignSequences(haplotype2.sequence, haplotype1.sequence, null)
-    readsProb + alignment.prior
+    readsProb.sum
   }
 
   val sequences: Set[String] = Set(haplotype1.sequence, haplotype2.sequence)
@@ -82,12 +86,16 @@ object HaplotypePairOrdering extends Ordering[HaplotypePair] {
    * @return Comparison of haplotype pairs.
    */
   def compare(pair1: HaplotypePair, pair2: HaplotypePair): Int = {
-    if (pair1.pairLikelihood < pair2.pairLikelihood) {
+    if (pair1.sameSequences(pair2)) {
+      0
+    } else if (pair1.pairLikelihood < pair2.pairLikelihood) {
       -1
     } else if (pair1.pairLikelihood > pair2.pairLikelihood) {
       1
+    } else if (pair1.variantCount >= pair2.variantCount) {
+      -1
     } else {
-      0
+      1
     }
   }
 }
