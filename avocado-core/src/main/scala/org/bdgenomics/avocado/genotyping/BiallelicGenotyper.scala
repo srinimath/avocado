@@ -365,8 +365,9 @@ class BiallelicGenotyper(sd: SequenceDictionary,
 
   def genotype(observations: RDD[Observation]): RDD[VariantContext] = {
     val sortedRdd = observations.keyBy(_.pos)
-      .repartitionAndSortWithinPartitions(GenomicPositionPartitioner(observations.partitions.size,
+      .partitionBy(GenomicPositionPartitioner(observations.partitions.size,
         contigLengths))
+      .mapPartitions(iter => iter.toSeq.sortBy(_._1).toIterator)
     val instrumentedRdd = {
       import org.apache.spark.rdd.MetricsContext._
       sortedRdd.instrument
